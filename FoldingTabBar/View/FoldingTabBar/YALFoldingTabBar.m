@@ -104,16 +104,19 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
     [self removeViewsBeforeUpdateUI];
     
     [self setupMainView];
-    [self setupCenterButton];
-    
-    //collapsed frame equals to frame of the centerButton
-    self.collapsedFrame = self.centerButton.frame;
-    
-    [self setupAdditionalTabBarItems];
+    if(!self.monoCenteredTabType) {
+        [self setupCenterButton];
+        self.collapsedFrame = self.centerButton.frame;
+        [self setupExtraTabBarItems];
+
+    } else {
+        self.centerButton = [UIButton new];
+        self.centerButton.frame = CGRectMake(0,0,0,0);
+        self.collapsedFrame = CGRectMake(0,0,0,0);
+        [self setupCenterTabBarItems];
+    }
     
     [self updateMaskLayer];
-    
-    [self setupExtraTabBarItems];
     [self setupTabBarItemsViewRepresentation];
     [self setupBarItemsModelRepresentation];
     [self prepareTabBarViewForInitialState];
@@ -165,6 +168,14 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
                               self.bounds.origin.y,
                               self.bounds.size.width,
                               self.bounds.size.height - self.bottomInset);
+    
+    if(self.monoCenteredTabType) {
+        frame = CGRectMake(self.bounds.size.width/2-self.mainViewSize.width/2,
+                              self.bounds.origin.y + 6,
+                              self.mainViewSize.width,
+                              self.mainViewSize.height);
+    }
+    
     frame = UIEdgeInsetsInsetRect(frame, self.tabBarViewEdgeInsets);
     
     self.mainView = [[UIView alloc] initWithFrame:frame];
@@ -173,10 +184,90 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
     self.mainView.layer.cornerRadius = CGRectGetHeight(self.mainView.bounds) / 2.f;
     self.mainView.layer.masksToBounds = YES;
     self.mainView.backgroundColor = self.tabBarColor;
-    
+    if(self.isShadowVisible) {
+        [self.layer setShadowColor:[UIColor colorWithRed:0.0 green:0.0 blue:0.0 alpha:0.14].CGColor];
+        [self.layer setShadowOpacity: 1];
+        [self.layer setShadowRadius: 6];
+        [self.layer setShadowOffset:CGSizeMake(0.0, 4.0)];
+        self.layer.masksToBounds = NO;
+        self.clipsToBounds = NO;
+    }
     [self addSubview:self.mainView];
 }
+
+- (void)setupCenterTabBarItems {
+    NSArray *leftTabBarItems = [self.dataSource leftTabBarItemsInTabBarView:self];
+    NSArray *rightTabBarItems = [self.dataSource rightTabBarItemsInTabBarView:self];
+    NSArray *mainItemsArray = [leftTabBarItems count] == 0 ? rightTabBarItems : leftTabBarItems;
+    NSUInteger numberOfTabBarButtonItems = [mainItemsArray count];
     
+    //calculate available space for left and right side
+    CGFloat availableSpaceForAdditionalBarButtonItem = CGRectGetWidth(self.mainView.frame) - self.tabBarItemsEdgeInsets.left - self.tabBarItemsEdgeInsets.right;
+    
+    CGFloat maxWidthForBarButonItem = availableSpaceForAdditionalBarButtonItem / numberOfTabBarButtonItems;
+    
+    NSMutableArray * reverseArray = [NSMutableArray arrayWithCapacity:[mainItemsArray count]];
+    
+    for (id element in [mainItemsArray reverseObjectEnumerator]) {
+        [reverseArray addObject:element];
+    }
+    
+    NSMutableArray *mutableArray = [NSMutableArray array];
+    NSMutableArray *mutableDotsArray = [NSMutableArray array];
+    
+    CGFloat startPositionLeft = self.tabBarItemsEdgeInsets.left;
+    
+    for (int i = 0; i < numberOfTabBarButtonItems; i++) {
+        CGFloat buttonOriginX = startPositionLeft + maxWidthForBarButonItem * i;
+        CGFloat buttonOriginY = 0.f;
+        
+        CGFloat buttonWidth = maxWidthForBarButonItem;
+        CGFloat buttonHeight = CGRectGetHeight(self.mainView.frame);
+        
+        startPositionLeft += self.tabBarItemsEdgeInsets.right;
+        
+        if(numberOfTabBarButtonItems == 1) {
+            buttonOriginX = availableSpaceForAdditionalBarButtonItem/2 - buttonWidth/2;
+        }
+        
+        YALTabBarItem *item = reverseArray[i];
+        UIImage *image = item.itemImage;
+        
+        UIButton *button = [[UIButton alloc] initWithFrame:CGRectMake(buttonOriginX, buttonOriginY, buttonWidth, buttonHeight)];
+        if(i != self.selectedTabBarItemIndex)
+            button.tintColor = self.tabBarItemColor;
+        else
+            button.tintColor = self.tabBarSelectedItemColor;
+        if (numberOfTabBarButtonItems == 1) {
+            CGRect rect = button.frame;
+            rect.size.width = CGRectGetHeight(self.mainView.frame);
+            button.bounds = rect;
+        }
+        
+        [button setImage:image forState:UIControlStateNormal];
+        [button addTarget:self action:@selector(didTapBarItem:) forControlEvents:UIControlEventTouchUpInside];
+        
+        if (self.state == YALTabBarStateCollapsed) {
+            button.hidden = YES;
+        }
+        
+        
+        [mutableArray addObject:button];
+        button.adjustsImageWhenHighlighted = NO;
+        
+        [self.mainView addSubview:button];
+    }
+    
+    NSMutableArray * reverseArrayDotViews = [NSMutableArray arrayWithCapacity:[mutableDotsArray count]];
+    
+    for (id element in [mutableDotsArray reverseObjectEnumerator]) {
+        [reverseArray addObject:element];
+    }
+    mutableDotsArray = reverseArrayDotViews;
+    
+    self.leftButtonsArray = [mutableArray copy];
+}
+
 - (void)setupAdditionalTabBarItems {
     NSArray *leftTabBarItems = [self.dataSource leftTabBarItemsInTabBarView:self];
     NSArray *rightTabBarItems = [self.dataSource rightTabBarItemsInTabBarView:self];
@@ -366,8 +457,14 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
     for (UIButton *button in [reverseArray arrayByAddingObjectsFromArray:self.rightButtonsArray]) {
         [tempArray addObject:button];
     }
-    
-    self.allAdditionalButtons = [tempArray copy];
+    if(self.monoCenteredTabType) {
+        if(self.leftButtonsArray.count == 0)
+            self.allAdditionalButtons = self.rightButtonsArray;
+        else
+            if(self.rightButtonsArray.count == 0)
+                self.allAdditionalButtons = self.leftButtonsArray;
+    } else
+        self.allAdditionalButtons = [tempArray copy];
     
     self.allAdditionalButtonsBottomView = [[NSMutableArray alloc] init];;
     for (UIButton *button in self.allAdditionalButtons) {
@@ -500,14 +597,19 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
         previousSelectedDotView.hidden = YES;
         [self.allAdditionalButtonsBottomView replaceObjectAtIndex:self.selectedTabBarItemIndex withObject:previousSelectedDotView];
     }
-    
+    if(self.tabBarItemColor != nil)
+    ((UIButton *)self.allAdditionalButtons[self.selectedTabBarItemIndex]).tintColor = self.tabBarItemColor;
     self.selectedTabBarItemIndex = index;
+    if(self.tabBarSelectedItemColor != nil)
+        ((UIButton *)self.allAdditionalButtons[index]).tintColor = self.tabBarSelectedItemColor;
     
+    if(!self.monoCenteredTabType) {
     if ([self.delegate respondsToSelector:@selector(tabBarWillCollapse:)]) {
         [self.delegate tabBarWillCollapse:self];
     }
     
     self.state = YALTabBarStateCollapsed;
+    }
     
     if ([self.delegate respondsToSelector:@selector(tabBar:didSelectItemAtIndex:)]) {
         [self.delegate tabBar:self didSelectItemAtIndex:index];
@@ -540,7 +642,9 @@ typedef NS_ENUM(NSUInteger, YALAnimatingState) {
     
     [CATransaction transactionWithAnimations:^{
         [self setAnimating:YES];
-        [self animateTabBarViewExpand];
+        if(!self.monoCenteredTabType) {
+            [self animateTabBarViewExpand];
+        }
         [self hideExtraLeftTabBarItem];
         [self hideExtraRightTabBarItem];
         [self animateCenterButtonExpand];

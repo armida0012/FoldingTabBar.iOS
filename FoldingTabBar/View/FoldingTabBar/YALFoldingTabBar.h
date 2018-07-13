@@ -56,10 +56,15 @@ typedef NS_ENUM(NSUInteger, YALTabBarState) {
 
 @property (nonatomic, copy) UIColor *tabBarColor;
 @property (nonatomic, copy) UIColor *dotColor;
+@property (nonatomic, copy) UIColor *tabBarItemColor;
+@property (nonatomic, copy) UIColor *tabBarSelectedItemColor;
 @property (nonatomic, assign) UIEdgeInsets tabBarViewEdgeInsets;
 @property (nonatomic, assign) UIEdgeInsets tabBarItemsEdgeInsets;
 @property (nonatomic, assign) CGFloat extraTabBarItemHeight;
 @property (nonatomic, assign) CGFloat offsetForExtraTabBarItems;
+@property (nonatomic, assign) CGSize mainViewSize;
+@property (nonatomic, assign) BOOL monoCenteredTabType;
+@property (nonatomic, assign) BOOL isShadowVisible;
 
 - (void)changeExtraLeftTabBarItemWithImage:(UIImage * _Nullable)image;
 - (void)changeExtraRightTabBarItemWithImage:(UIImage * _Nullable)image;
